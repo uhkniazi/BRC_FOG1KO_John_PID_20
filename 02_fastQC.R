@@ -43,7 +43,7 @@ str(dfFiles)
 # remove redundant columns
 dfFiles = dfFiles[,-c(5,7)]
 #### get the names of the fastq files for first sequencing run
-setwd('dataExternal/data/raw/')
+setwd('dataExternal/fastq/raw/')
 csFiles = list.files('.', pattern = '*.gz', recursive = T)
 
 # sanity check if all files present in directory
@@ -62,120 +62,28 @@ lMetaData = list(files=dfFiles, samples=dfSample)
 
 ob = CFastqQualityBatch(csFiles, cNames, fReadDirection, lMetaData)
 
-
-# # split the file names into batches by list, to run analysis on each sample
-# lFilesIndex = split(dfFiles$name, dfFiles$idSample)
-# names(lFilesIndex) = dfSample$title
-
-
-
-
-
-## perform the analysis one sample at a time
-## function to write the qa files
-write.qa = function(fls, indir, title){
-  wd = getwd()
-  setwd(indir)
-  ob = CFastqQuality(fls, title)
-  setwd(wd)
-  cat(paste('done', title, '\n'))
-  return(ob)
-}
-
-ivFilesIndex = seq_along(csFiles)
-
-lOb = lapply(ivFilesIndex, function(x){
-  tryCatch(write.qa(dfFiles$name[x], getwd(), as.character(dfFiles$id[x])), error=function(e) NULL)
-})
-
-names(lOb) = as.character(dfFiles$id)
 setwd(gcswd)
-n = make.names(paste('CFastqQuality data id 39 gui'))
-lOb$meta.1 = dfSample
-lOb$meta.2 = dfFiles
-lOb$desc = paste('CFastqQuality data id 39 gui', date())
+n = make.names(paste('CFastqQualityBatch data id 41 john rds'))
 n2 = paste0('~/Data/MetaData/', n)
-#save(lOb, file=n2)
+save(ob, file=n2)
 
 ## note: comment out as this entry has been made in db
 db = dbConnect(MySQL(), user='rstudio', password='12345', dbname='Projects', host='127.0.0.1')
 dbListTables(db)
 dbListFields(db, 'MetaFile')
-df = data.frame(idData=g_did, name=n, type='rds', location='~/Data/MetaData/', comment='pre trim FASTQ quality checks on Gui mouse data')
+df = data.frame(idData=g_did, name=n, type='rds', location='~/Data/MetaData/', comment='pre trim FASTQ quality checks on John mouse data')
 dbWriteTable(db, name = 'MetaFile', value=df, append=T, row.names=F)
 dbDisconnect(db)
 
 ### create the plots of interest
 getwd()
-lOb$desc = NULL
-lOb$meta.1 = NULL
-lOb$meta.2 = NULL
 
-db = dbConnect(MySQL(), user='rstudio', password='12345', dbname='Projects', host='127.0.0.1')
-dbListTables(db)
-g_did
-q = paste0('select File.id as fid, File.name, File.type, Sample.* from File, Sample where Sample.idData = 39 AND (File.idSample = Sample.id AND File.type like "%fastq%")')
-dfBatches = dbGetQuery(db, q)
-dbDisconnect(db)
-identical(dfFiles$id, dfBatches$fid)
-identical(names(lOb), as.character(dfBatches$fid))
+iGetReadCount(ob)
+barplot.readcount(ob)
+plot.alphabetcycle(ob)
+plot.qualitycycle(ob)
 
-# assign sample id (which is unique key) to sample name
-cvSampleNames = as.character(dfBatches$id)
-cvSampleNames = paste(cvSampleNames, gsub('.+(_[1|2])\\.fastq.gz$', '\\1', dfBatches$name), sep='')
-names(lOb) = cvSampleNames
-
-pdf(file='results/qa.fastq.pdf')
-
-iReadCount = sapply(lOb, CFastqQuality.getReadCount)
-iReadCount = iReadCount/1e+6
-
-barplot(iReadCount, las=2, main='Pre-Trim Read Count', ylab = 'No. of Reads in Millions', cex.names =0.8, col=grey.colors(2))
-
-mQuality = sapply(lOb, function(x){
-  m = mGetReadQualityByCycle(x)
-  m = colMeans(m, na.rm = T)
-  return(m)
-})
-
-matplot(mQuality, type='l', main='Pre-trim base quality', ylab = 'Mean Score', xlab='Position in Read')
-
-lReadWidth = lapply(lOb, iGetReadWidth)
-boxplot(lReadWidth, las=2, main='Pre-trim Read Width', ylab = 'Read Width', col=grey.colors(2), outline=F, xaxt='n')
-axis(1, at=1:length(lReadWidth), labels = names(lReadWidth), cex.axis=0.8, las=2)
-
-## plot all the alphabets by cycle for each forward and reverse reads
-i = grep('_1', cvSampleNames)
-
-lAlphabets = lapply(i, function(x){
-  m = t(mGetAlphabetByCycle(lOb[[x]]))
-  m = m[,c('A', 'T', 'G', 'C')]
-  r = rowSums(m)
-  m = sweep(m, 1, r, '/')
-  return(m)
-})
-
-matplot(lAlphabets[[1]], type='l', main='Pre-trim Sequence Content - Forward Strands', ylab = 'Proportion of Base count', xlab='Position in Read')
-temp = lapply(lAlphabets[-1], function(x)
-  matlines(x, type='l'))
-legend('topleft', legend = colnames(lAlphabets[[1]]), lty=1:4, col=1:4, ncol=2, lwd=2)
-
-# reverse strands
-i = grep('_2', cvSampleNames)
-
-lAlphabets = lapply(i, function(x){
-  m = t(mGetAlphabetByCycle(lOb[[x]]))
-  m = m[,c('A', 'T', 'G', 'C')]
-  r = rowSums(m)
-  m = sweep(m, 1, r, '/')
-  return(m)
-})
-
-matplot(lAlphabets[[1]], type='l', main='Pre-trim Sequence Content - Reverse Strands', ylab = 'Proportion of Base count', xlab='Position in Read')
-temp = lapply(lAlphabets[-1], function(x)
-  matlines(x, type='l'))
-legend('topleft', legend = colnames(lAlphabets[[1]]), lty=1:4, col=1:4, ncol=2, lwd=2)
-
+######### some additional diagnostic plots on the data matrix
 ### some diagnostic plots
 url = 'https://raw.githubusercontent.com/uhkniazi/CDiagnosticPlots/master/CDiagnosticPlots.R'
 download(url, 'CDiagnosticPlots.R')
@@ -185,35 +93,61 @@ source('CDiagnosticPlots.R')
 # delete the file after source
 unlink('CDiagnosticPlots.R')
 
-fReadDirection = rep(NA, times=nrow(dfBatches))
-i = grepl('_1', cvSampleNames)
-fReadDirection[i] = '_1'
-fReadDirection[!i] = '_2'
-fReadDirection = factor(fReadDirection)
+## extract the base quality matrix 
+mBatch = mGetReadQualityByCycle(ob)
+dim(mBatch)
+mBatch[1:10, 1:4]
 
-str(dfBatches)
-mBatch = mQuality
-#colnames(mBatch) = paste0(dfBatches$fid, '-', dfBatches$title, '-', as.character(fReadDirection))
+## creat an object of diagnostics class to make plots
+oDiag = CDiagnosticPlots(mBatch, 'Base Quality')
 
-oDiag = CDiagnosticPlots(mBatch, 'Pre-trim Base Quality')
+## turning off automatic jitters
+## we set jitter to FALSE for PCA, otherwise, in sparse matrix a random jitter is added to avoid divisions by zeros
 l = CDiagnosticPlotsGetParameters(oDiag)
 l$PCA.jitter = F; l$HC.jitter = F;
 oDiag = CDiagnosticPlotsSetParameters(oDiag, l)
 
-plot.mean.summary(oDiag, fReadDirection)
-plot.sigma.summary(oDiag, fReadDirection)
-boxplot.median.summary(oDiag, fReadDirection)
-plot.PCA(oDiag, fReadDirection)
-plot.dendogram(oDiag, fReadDirection, labels_cex = 0.8)
+fBatch = ob@fReadDirection
+str(ob@lMeta$files)
+fBatch = factor(ob@lMeta$files$group3)
 
-## try a new batch
-fBatch = factor(dfBatches$group3)
-levels(fBatch)
+## try some various factors to make the plots of low dimensional summaries
 plot.mean.summary(oDiag, fBatch)
 plot.sigma.summary(oDiag, fBatch)
 boxplot.median.summary(oDiag, fBatch)
 plot.PCA(oDiag, fBatch)
 plot.dendogram(oDiag, fBatch, labels_cex = 0.8)
 
-dev.off(dev.cur())
+## looking at alphabets 
+## change direction and alphabet i.e. base as required
+i = grep('2', ob@fReadDirection)
+
+lAlphabets = lapply(i, function(x){
+  m = t(mGetAlphabetByCycle(ob@lData[[x]]))
+  m = m[,c('A', 'T', 'G', 'C')]
+  r = rowSums(m)
+  m = sweep(m, 1, r, '/')
+  return(m)
+})
+
+mAlphabet = do.call(cbind, lapply(lAlphabets, function(x) return(x[,'G'])))
+dim(mAlphabet)
+colnames(mAlphabet) = ob@lMeta$samples$title
+oDiag.2 = CDiagnosticPlots(mAlphabet, 'reverse base G')
+
+## turning off automatic jitters
+## we set jitter to FALSE for PCA, otherwise, in sparse matrix a random jitter is added to avoid divisions by zeros
+l = CDiagnosticPlotsGetParameters(oDiag.2)
+l$PCA.jitter = F; l$HC.jitter = F;
+oDiag.2 = CDiagnosticPlotsSetParameters(oDiag.2, l)
+
+str(ob@lMeta$samples)
+fBatch = factor(ob@lMeta$samples$group3)
+
+## try some various factors to make the plots of low dimensional summaries
+plot.mean.summary(oDiag.2, fBatch)
+plot.sigma.summary(oDiag.2, fBatch)
+boxplot.median.summary(oDiag.2, fBatch)
+plot.PCA(oDiag.2, fBatch)
+plot.dendogram(oDiag.2, fBatch, labels_cex = 0.8)
 
