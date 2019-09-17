@@ -7,7 +7,7 @@
 #$ -cwd
 #$ -N trim-array
 #$ -j y
-#$ -l h_vmem=3G
+#$ -l h_vmem=19G
 #$ -t 1-30
 
 
