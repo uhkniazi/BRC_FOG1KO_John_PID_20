@@ -103,9 +103,7 @@ inr2=`sed -n ${number}p $paramfile | awk '{print $2}'`
 outsam=`sed -n ${number}p $paramfile | awk '{print $3}'`
 
 # 9. Run the program.", oFile)
-## remove --trim5 option
-# p1 = paste('hisat2 --trim5 10 -x', cvGeneIndex, '-1', '$inr1', '-2', '$inr2', '-S', '$outsam', sep=' ')
-p1 = paste('hisat2 -x', cvGeneIndex, '-1', '$inr1', '-2', '$inr2', '-S', '$outsam', sep=' ')
+p1 = paste('hisat2 --trim5 10 -x', cvGeneIndex, '-1', '$inr1', '-2', '$inr2', '-S', '$outsam', sep=' ')
 com = paste(p1)
 
 writeLines(com, oFile)
