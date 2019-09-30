@@ -82,11 +82,11 @@ identical(colnames(mData.norm), as.character(dfSample.2$fReplicates))
 ## delete sample section after testing
 mData.norm = round(mData.norm, 0)
 
-set.seed(123)
-i = sample(1:nrow(mData.norm), 10, replace = F)
-dfData = data.frame(t(mData.norm[i,]))
+# set.seed(123)
+# i = sample(1:nrow(mData.norm), 100, replace = F)
+# dfData = data.frame(t(mData.norm[i,]))
 
-#dfData = data.frame(t(mData.norm))
+dfData = data.frame(t(mData.norm))
 dfData = stack(dfData)
 dfSample.2$group1 = ifelse(dfSample.2$group1 == 'Differentiated', 'D', 'ND')
 str(dfSample.2)
@@ -102,13 +102,13 @@ dfData = dfData[order(dfData$Coef), ]
 str(dfData)
 
 # # setup the model
-library(lme4)
-fit.lme1 = glmer.nb(values ~ 1 + (1 | Coef), data=dfData)
-summary(fit.lme1)
-ran = ranef(fit.lme1, condVar=F)
-
-plot(log(fitted(fit.lme1)), resid(fit.lme1), pch=20, cex=0.7)
-lines(lowess(log(fitted(fit.lme1)), resid(fit.lme1)), col=2)
+# library(lme4)
+# fit.lme1 = glmer.nb(values ~ 1 + (1 | Coef), data=dfData)
+# summary(fit.lme1)
+# ran = ranef(fit.lme1, condVar=F)
+# 
+# plot(log(fitted(fit.lme1)), resid(fit.lme1), pch=20, cex=0.7)
+# lines(lowess(log(fitted(fit.lme1)), resid(fit.lme1)), col=2)
 
 ## setup the stan model
 library(rstan)
@@ -118,7 +118,7 @@ options(mc.cores = parallel::detectCores())
 stanDso = rstan::stan_model(file='nbinomResp1RandomEffectsMultipleScales.stan')
 
 ## calculate hyperparameters for variance of coefficients
-l = gammaShRaFromModeSD(sd(log(dfData$values+0.5)), 2*sd(log(dfData$values+0.5)))
+# l = gammaShRaFromModeSD(sd(log(dfData$values+0.5)), 2*sd(log(dfData$values+0.5)))
 # # ## set initial values
 # ran = ranef(fit.lme1)
 # r1 = ran$Coef
@@ -142,25 +142,25 @@ lStanData = list(Ntotal=nrow(dfData),
                  Nphi=nlevels(dfData$ind),
                  NphiMap=as.numeric(dfData$ind),
                  y=dfData$values, 
-                 gammaShape=l$shape, gammaRate=l$rate,
+                 #gammaShape=l$shape, gammaRate=l$rate,
                  intercept = mean(log(dfData$values+0.5)), intercept_sd= sd(log(dfData$values+0.5))*3)
 
-ptm = proc.time()
-
-fit.stan = sampling(stanDso, data=lStanData, iter=1000, chains=4,
-                    pars=c('sigmaRan1',
-                           'phi',
-                           #'mu',
-                           'rGroupsJitter1'
-                           #'betas',
-                           #'phi_scaled'
-                           ),
-                    cores=4, control=list(adapt_delta=0.99, max_treedepth = 11))#, init=initf)
-# save(fit.stan, file='temp/fit.stan.nb_13Mar.rds')
+#' ptm = proc.time()
+#' 
+#' fit.stan = sampling(stanDso, data=lStanData, iter=1000, chains=4,
+#'                     pars=c('sigmaRan1',
+#'                            'phi',
+#'                            #'mu',
+#'                            'rGroupsJitter1'
+#'                            #'betas',
+#'                            #'phi_scaled'
+#'                            ),
+#'                     cores=4, control=list(adapt_delta=0.99, max_treedepth = 11))#, init=initf)
+#' save(fit.stan, file='results/fit.stan.nb_25Sep.rds')
 ptm.end = proc.time()
-print(fit.stan, c('sigmaRan1[1]', 'phi'), digits=3)
+print(fit.stan, c('sigmaRan1'), digits=3)
+print(fit.stan, c('phi'), digits=3)
 print(fit.stan, c('rGroupsJitter1'))
-#traceplot(fit.stan, 'betas')
 traceplot(fit.stan, c('sigmaRan1[1]'))
 traceplot(fit.stan, c('sigmaRan1[2]'))
 traceplot(fit.stan, c('rGroupsJitter1[1]', 'sigmaRan1[1]'))
@@ -203,7 +203,7 @@ levels(d$fBatch)
 ## repeat this for each comparison
 
 ## get a p-value for each comparison
-l = tapply(d$cols, d$split, FUN = function(x, base='ND:WT', deflection='D:WT') {
+l = tapply(d$cols, d$split, FUN = function(x, base='ND:D3', deflection='D:D3') {
   c = x
   names(c) = as.character(d$fBatch[c])
   dif = getDifference(ivData = mCoef[,c[deflection]], ivBaseline = mCoef[,c[base]])
@@ -229,30 +229,39 @@ df = df[i,]
 dfResults$SYMBOL = df$SYMBOL
 identical(dfResults$ind, df$ENTREZID)
 ## produce the plots 
-f_plotVolcano(dfResults, 'WT:15.5 vs WT:13.5')#, fc.lim=c(-2.5, 2.5))
-f_plotVolcano(dfResults, 'WT:15.5 vs WT:13.5', fc.lim=range(dfResults$logFC))
+f_plotVolcano(dfResults, 'D:D3 vs ND:D3')#, fc.lim=c(-2.5, 2.5))
+f_plotVolcano(dfResults, 'D:D3 vs ND:D3', fc.lim=range(dfResults$logFC))
 
 m = tapply(dfData$values, dfData$ind, mean)
 i = match(rownames(dfResults), names(m))
 m = m[i]
 identical(names(m), rownames(dfResults))
-plotMeanFC(log(m), dfResults, 0.01, 'WT:14.5 vs WT:13.5')
+plotMeanFC(log(m), dfResults, 0.01, 'D:D3 vs ND:D3')
 table(dfResults$adj.P.Val < 0.01)
 ## save the results 
-write.csv(dfResults, file='results/DEAnalysisMut:15.5VsMut:14.5.xls')
+write.csv(dfResults, file='results/DEAnalysisD:D3VsND:D3.xls')
 
 ######### do a comparison with deseq2
-dfDesign = data.frame(Treatment = factor(dfSample.2$group1, levels=c('WT', 'Mut')):factor(dfSample.2$group3)
+dfDesign = data.frame(Treatment = factor(dfSample.2$group1, levels = c('ND', 'D')):factor(dfSample.2$group3)
                       , row.names=colnames(mData))
 
 oDseq = DESeqDataSetFromMatrix(mData, dfDesign, design = ~ Treatment)
 oDseq = DESeq(oDseq)
-plotDispEsts(oDseq)
-oRes = results(oDseq, contrast=c('Treatment', 'Mut:15.5', 'Mut:14.5'))
-plotMA(oRes)
-temp = as.data.frame(oRes)
-i = match((dfResults$ind), rownames(temp))
-temp = temp[i,]
-identical((dfResults$ind), rownames(temp))
-plot(dfResults$logFC, temp$log2FoldChange, pch=20)
-table(oRes$padj < 0.01)
+
+## deseq error
+# estimating dispersions
+# Error in checkForExperimentalReplicates(object, modelMatrix) : 
+#   
+#   The design matrix has the same number of samples and coefficients to fit,
+# so estimation of dispersion is not possible. Treating samples
+# as replicates was deprecated in v1.20 and no longer supported since v1.22.
+
+# plotDispEsts(oDseq)
+# oRes = results(oDseq, contrast=c('Treatment', 'D:WT', 'ND:WT'))
+# plotMA(oRes)
+# temp = as.data.frame(oRes)
+# i = match((dfResults$ind), rownames(temp))
+# temp = temp[i,]
+# identical((dfResults$ind), rownames(temp))
+# plot(dfResults$logFC, temp$log2FoldChange, pch=20)
+# table(oRes$padj < 0.01)

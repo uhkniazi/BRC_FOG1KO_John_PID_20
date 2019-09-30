@@ -7,8 +7,8 @@ data {
                                                     // set of coefficients from group 1
   int y[Ntotal]; // response variable
   // additional parameters
-  real gammaShape; // hyperparameters for the gamma distribution for batches of scales 
-  real gammaRate;
+  //real gammaShape; // hyperparameters for the gamma distribution for batches of scales 
+  //real gammaRate;
   real intercept;
   real intercept_sd;
   int<lower=1> Nphi; // number of phi terms for each subset of observations 
@@ -34,9 +34,10 @@ transformed parameters {
 model {
   real sigmaRan1_expanded[Nclusters1]; 
   
-  sigmaRan1 ~ gamma(gammaShape, gammaRate);
+  //sigmaRan1 ~ gamma(gammaShape, gammaRate);
+  sigmaRan1 ~ exponential(1);
   betas ~ normal(intercept, intercept_sd);
-  phi_scaled ~ normal(0, 20); // weak prior on square root scale
+  phi_scaled ~ normal(0, 10); // weak prior on square root scale
   
   // random effects sample
   sigmaRan1_expanded = sigmaRan1[NBatchMap1];
