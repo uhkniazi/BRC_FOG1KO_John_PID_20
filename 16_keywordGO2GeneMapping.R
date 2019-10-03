@@ -211,6 +211,7 @@ close(oFile.go)
 
 #######################################################
 ####### find particular types of genes from pathway keyword search
+#dfGO = AnnotationDbi::select(org.Mm.eg.db, keys = 'Zfpm1', columns = c('GO'), keytype = 'SYMBOL')
 dfGO = AnnotationDbi::select(org.Mm.eg.db, keys = rownames(dfCommonGenes), columns = c('GO'), keytype = 'ENTREZID')
 dfGO = dfGO[dfGO$ONTOLOGY == 'BP', ]
 dfGO = na.omit(dfGO)
@@ -221,10 +222,14 @@ columns(GO.db)
 dfGO = AnnotationDbi::select(GO.db, keys=as.character(unique(dfGO$GO)), columns=columns(GO.db), keytype='GOID')
 dim(dfGO)
 ## keyword search
-i = grep('erythroid', dfGO$DEFINITION, ignore.case = T)
+i = grep('erythrocyte', dfGO$DEFINITION, ignore.case = T)
 length(i)
 temp = dfGO[i,]
-dfGO.keyword = dfGO[i,]
+
+i = grep('blood cell', dfGO$DEFINITION, ignore.case = T)
+length(i)
+temp = rbind(temp, dfGO[i,])
+dfGO.keyword = temp
 
 ### work back to original gene list
 dfGO = AnnotationDbi::select(org.Mm.eg.db, keys = dfGO.keyword$GOID, keytype = c('GO'), columns = 'ENTREZID')
@@ -232,7 +237,8 @@ dim(dfGO)
 head(dfGO)
 table(dfGO$ENTREZID %in% rownames(dfCommonGenes))
 cvGenes.keyword = dfGO$ENTREZID[(dfGO$ENTREZID %in% rownames(dfCommonGenes))]
-
+cvGenes.keyword = unique(cvGenes.keyword)
+length(cvGenes.keyword)
 ## go up to stan section to load the d.bk dataframe
 d.bk = d[as.character(d$split.2) %in% cvGenes.keyword,]
 d.bk = droplevels.data.frame(d.bk)
@@ -261,7 +267,7 @@ m = split(d.bk$coef, f = d.bk$SYMBOL)
 m = do.call(rbind, m)
 hc = hclust(dist(t(scale(t(m)))))
 plot(hc, main='clustered')
-c = cutree(hc, k = 2)
+c = cutree(hc, k = 3)
 table(c)
 
 ## expand the cluster variable after matching it with symbol
@@ -269,7 +275,7 @@ i = match(as.character(d.bk$SYMBOL), names(c))
 d.bk$SYMBOL.cluster = factor(c[i]):factor(d.bk$SYMBOL)
 
 xyplot(coef ~ differentiated | SYMBOL.cluster, groups=groups, data=d.bk, type=c('l', 'p'), scales=list(relation='free', x=list(cex=0.7), y=list(cex=0.7)), 
-       ylab='Model Estimated log Deflections from Intercept', main=list(label='Tooth Development Genes DE expressed at 3 time points in WT', cex=0.8),
+       ylab='Model Estimated log Deflections from Intercept', main=list(label='Zfpm1 (Fog-1) and Erythrocyte development genes expressed in data', cex=0.8),
        auto.key=list(columns=3))
 
 
