@@ -104,7 +104,7 @@ i = match(df$ENTREZID, rownames(mData.scaled))
 mData.scaled = mData.scaled[i,]
 identical(rownames(mData.scaled), df$ENTREZID)
 rownames(mData.scaled) = df$SYMBOL
-
+dim(mData.scaled)
 ## create data.frame
 dfData = data.frame(t(mData.scaled))
 ###########################################################
@@ -152,7 +152,7 @@ plot(coeftab(fit.1, fit.2), pars=c('b0', 'Ga', 'Fog'))
 plot(compare(fit.1, fit.2))
 pairs(fit.2)
 
-################## simulations from DAG
+################## simulations from DAG1
 nsim = 1000
 df.Sim = data.frame(1:nsim)
 df.Sim$Gata1 = rnorm(nsim)
@@ -161,10 +161,21 @@ m = cbind(1, as.matrix(df.Sim[,-1]))
 head(m)
 coef(fit.2)
 m = m %*% coef(fit.1)[-4]
-df.Sim$Slc4a1 = rnorm(nsim, m, coef(fit.2)['sigmaPop'])
+df.Sim$Slc4a1 = rnorm(nsim, m)
 
 
 ## recover coefficients using simulated data fit
+fit.1.sim <- quap(
+  alist(
+    Slc4a1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1,
+    b0 ~ dnorm(0, 2),
+    c(Ga) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim,
+  start=list(b0=0)
+)
+
 fit.2.sim <- quap(
   alist(
     Slc4a1 ~ dnorm(mu, sigmaPop),
@@ -176,7 +187,92 @@ fit.2.sim <- quap(
   start=list(b0=0)
 )
 
-plot(coeftab(fit.2, fit.2.sim))
+plot(coeftab(fit.2, fit.1.sim, fit.2.sim), pars=c('b0', 'Ga', 'Fog'))
+
+################## simulations from DAG2
+nsim = 1000
+df.Sim2 = data.frame(1:nsim)
+df.Sim2$Gata1 = rnorm(nsim)
+df.Sim2$Lmo2 = rnorm(nsim)
+df.Sim2$Ldb1 = rnorm(nsim)
+df.Sim2$Tcf3 = rnorm(nsim)
+df.Sim2$Stil = rnorm(nsim)
+
+fit.temp <- quap(
+  alist(
+    Zfpm1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+summary(fit.temp)
+colnames(df.Sim2)
+m = cbind(1, as.matrix(df.Sim2[,-1]))
+head(m)
+coef(fit.temp)
+m = m %*% coef(fit.temp)[-7]
+df.Sim2$Zfpm1 = rnorm(nsim, m)
+
+fit.temp.sim <- quap(
+  alist(
+    Zfpm1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim2,
+  start=list(b0=0)
+)
+
+plot(coeftab(fit.temp, fit.temp.sim))
+
+### generate the Slc data now
+colnames(df.Sim2)
+m = cbind(1, as.matrix(df.Sim2[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim2$Slc4a1 = rnorm(nsim, m)
+
+## recover coefficients using simulated data fit to Dag2
+fit.2.sim2 <- quap(
+  alist(
+    Slc4a1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim2,
+  start=list(b0=0)
+)
+
+plot(coeftab(fit.2, fit.2.sim, fit.2.sim2), pars=c('b0', 'Ga', 'Fog'))
+
+
+
+
+
+
+
+#### add a section on fake-data simulation 
+#### compare with the original data
+## simulate data
+fake.fit.1 = sim(fit.1, n = 300)
+fake.fit.1.sim = sim(fit.1.sim, n=300)
+
+fake.fit.2 = sim(fit.2, n = 300)
+fake.fit.2.sim = sim(fit.2.sim, n=300)
+###########################################################
+
+
+###########################################################
+########## Band3/Slc4a1 expression models of various sizes
+###########################################################
+
+
 ## simulate new response variable
 str(df.Sim)
 coef(fit.1.cd)
