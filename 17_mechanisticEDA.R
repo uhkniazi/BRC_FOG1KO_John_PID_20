@@ -488,6 +488,379 @@ plot(df.Sim$Hbb.b1, df.Sim$Gata1, pch=20)
 
 ##########################################################
 
+
+###########################################################
+########## Gata2 expression models of various sizes
+###########################################################
+fit.1a <- quap(
+  alist(
+    Gata2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1,
+    b0 ~ dnorm(0, 2),
+    c(Ga) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+
+fit.1b <- quap(
+  alist(
+    Gata2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+
+###### both covariates Gata1 and fog1 22761 zfpm1
+fit.2 <- quap(
+  alist(
+    Gata2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+summary(fit.2)
+plot(coeftab(fit.1a, fit.1b, fit.2), pars=c('b0', 'Ga', 'Fog'))
+plot(compare(fit.1a, fit.1b, fit.2))
+pairs(fit.2)
+
+## try the 3 simulated data sets
+colnames(df.Sim)
+m = cbind(1, as.matrix(df.Sim[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim$Gata2 = rnorm(nsim, m)
+
+colnames(df.Sim2)
+m = cbind(1, as.matrix(df.Sim2[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim2$Gata2 = rnorm(nsim, m)
+
+colnames(df.Sim3)
+m = cbind(1, as.matrix(df.Sim3[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim3$Gata2 = rnorm(nsim, m)
+
+### fit the 3 simulated models
+fit.2.sim1 <- quap(
+  alist(
+    Gata2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim,
+  start=list(b0=0)
+)
+
+fit.2.sim2 <- quap(
+  alist(
+    Gata2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim2,
+  start=list(b0=0)
+)
+
+fit.2.sim3 <- quap(
+  alist(
+    Gata2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim3,
+  start=list(b0=0)
+)
+
+plot(coeftab(fit.2, fit.2.sim1, fit.2.sim2, fit.2.sim3))
+plot(coeftab(fit.2, fit.2.sim1, fit.2.sim2, fit.2.sim3), pars=c('Ga', 'Fog'))
+
+hist(dfData$Gata2, prob=T)
+lines(density(colMeans(sim(fit.2.sim3, n=100))))
+
+plot(dfData$Gata2, dfData$Zfpm1, pch=20, col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))])
+points(colMeans(sim(fit.2, n=100)), dfData$Zfpm1, col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))], pch='*')
+legend('topright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+
+## behaviour of gata1 when fog1 is low or high
+i = range(dfData$Gata1)
+iGrid = seq(i[1], i[2], length.out = 50)
+
+## see pages 105 to 109 (rethinking book)
+mu.low = link(fit.2, data=data.frame(Gata1=iGrid, Zfpm1=min(dfData$Zfpm1)), n=100)
+plot(dfData$Gata1, dfData$Gata2, pch=20, col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))])
+legend('topright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+lines(iGrid, colMeans(mu.low), col=1)
+shade(apply(mu.low, 2, HPDI, prob=0.89), iGrid)
+
+mu.av = link(fit.2, data=data.frame(Gata1=iGrid, Zfpm1=0), n=100)
+lines(iGrid, colMeans(mu.av), col=2)
+shade(apply(mu.av, 2, HPDI, prob=0.89), iGrid)
+
+mu.high = link(fit.2, data=data.frame(Gata1=iGrid, Zfpm1=max(dfData$Zfpm1)), n=100)
+lines(iGrid, colMeans(mu.high), col=3)
+shade(apply(mu.high, 2, HPDI, prob=0.89), iGrid)
+
+###########################################################
+
+
+###########################################################
+########## Kit expression models of various sizes
+###########################################################
+fit.1a <- quap(
+  alist(
+    Kit ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1,
+    b0 ~ dnorm(0, 2),
+    c(Ga) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+
+fit.1b <- quap(
+  alist(
+    Kit ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+
+###### both covariates Gata1 and fog1 22761 zfpm1
+fit.2 <- quap(
+  alist(
+    Kit ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+summary(fit.2)
+plot(coeftab(fit.1a, fit.1b, fit.2), pars=c('b0', 'Ga', 'Fog'))
+plot(compare(fit.1a, fit.1b, fit.2))
+pairs(fit.2)
+
+## try the 3 simulated data sets
+colnames(df.Sim)
+m = cbind(1, as.matrix(df.Sim[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim$Kit = rnorm(nsim, m)
+
+colnames(df.Sim2)
+m = cbind(1, as.matrix(df.Sim2[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim2$Kit = rnorm(nsim, m)
+
+colnames(df.Sim3)
+m = cbind(1, as.matrix(df.Sim3[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim3$Kit = rnorm(nsim, m)
+
+### fit the 3 simulated models
+fit.2.sim1 <- quap(
+  alist(
+    Kit ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim,
+  start=list(b0=0)
+)
+
+fit.2.sim2 <- quap(
+  alist(
+    Kit ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim2,
+  start=list(b0=0)
+)
+
+fit.2.sim3 <- quap(
+  alist(
+    Kit ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim3,
+  start=list(b0=0)
+)
+
+plot(coeftab(fit.2, fit.2.sim1, fit.2.sim2, fit.2.sim3))
+plot(coeftab(fit.2, fit.2.sim1, fit.2.sim2, fit.2.sim3), pars=c('Ga', 'Fog'))
+
+hist(dfData$Kit, prob=T)
+lines(density(colMeans(sim(fit.2, n=100))))
+###########################################################
+
+
+###########################################################
+########## MS4A2 /FCER1B (mast cell) expression models of various sizes
+###########################################################
+fit.1a <- quap(
+  alist(
+    Ms4a2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1,
+    b0 ~ dnorm(0, 2),
+    c(Ga) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+
+fit.1b <- quap(
+  alist(
+    Ms4a2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+
+###### both covariates Gata1 and fog1 22761 zfpm1
+fit.2 <- quap(
+  alist(
+    Ms4a2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+summary(fit.2)
+plot(coeftab(fit.1a, fit.1b, fit.2), pars=c('b0', 'Ga', 'Fog'))
+plot(compare(fit.1a, fit.1b, fit.2))
+pairs(fit.2)
+
+## try the 3 simulated data sets
+colnames(df.Sim)
+m = cbind(1, as.matrix(df.Sim[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim$Ms4a2 = rnorm(nsim, m)
+
+colnames(df.Sim2)
+m = cbind(1, as.matrix(df.Sim2[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim2$Ms4a2 = rnorm(nsim, m)
+
+colnames(df.Sim3)
+m = cbind(1, as.matrix(df.Sim3[,c('Gata1', 'Zfpm1')]))
+head(m)
+coef(fit.2)
+m = m %*% coef(fit.2)[-4]
+df.Sim3$Ms4a2 = rnorm(nsim, m)
+
+### fit the 3 simulated models
+fit.2.sim1 <- quap(
+  alist(
+    Ms4a2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim,
+  start=list(b0=0)
+)
+
+fit.2.sim2 <- quap(
+  alist(
+    Ms4a2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim2,
+  start=list(b0=0)
+)
+
+fit.2.sim3 <- quap(
+  alist(
+    Ms4a2 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim3,
+  start=list(b0=0)
+)
+
+plot(coeftab(fit.2, fit.2.sim1, fit.2.sim2, fit.2.sim3))
+plot(coeftab(fit.2, fit.2.sim1, fit.2.sim2, fit.2.sim3), pars=c('Ga', 'Fog'))
+
+hist(dfData$Ms4a2, prob=T)
+lines(density(colMeans(sim(fit.2.sim3, n=100))))
+
+plot(dfData$Zfpm1, dfData$Ms4a2, pch=19+as.numeric(factor(dfSample.2$group1)), 
+     col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))])
+legend('topright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+
+plot(dfData$Gata1, dfData$Ms4a2, pch=19+as.numeric(factor(dfSample.2$group1)), 
+     col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))])
+legend('topright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+
+## behaviour of gata1 when fog1 is low or high
+i = range(dfData$Gata1)
+iGrid = seq(i[1], i[2], length.out = 50)
+
+## see pages 105 to 109 (rethinking book)
+mu.low = link(fit.2, data=data.frame(Gata1=iGrid, Zfpm1=min(dfData$Zfpm1)), n=100)
+plot(dfData$Gata1, dfData$Gata2, pch=20, col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))])
+legend('topright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+lines(iGrid, colMeans(mu.low), col=1)
+shade(apply(mu.low, 2, HPDI, prob=0.89), iGrid)
+
+mu.av = link(fit.2, data=data.frame(Gata1=iGrid, Zfpm1=0), n=100)
+lines(iGrid, colMeans(mu.av), col=2)
+shade(apply(mu.av, 2, HPDI, prob=0.89), iGrid)
+
+mu.high = link(fit.2, data=data.frame(Gata1=iGrid, Zfpm1=max(dfData$Zfpm1)), n=100)
+lines(iGrid, colMeans(mu.high), col=3)
+shade(apply(mu.high, 2, HPDI, prob=0.89), iGrid)
+###########################################################
+
+
+
+
+
+
+
+
 ## simulate new response variable
 str(df.Sim)
 coef(fit.1.cd)
