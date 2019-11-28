@@ -110,13 +110,109 @@ dfData = data.frame(t(mData.scaled))
 ###########################################################
 
 ###########################################################
+########## activation of fog1
+###########################################################
+fit.5 <- quap(
+  alist(
+    Zfpm1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+summary(fit.5)
+plot(coeftab(fit.5), pars=c('Ga', 'Lm', 'Ld', 'Tc', 'St'), main='Activation of Fog1')
+pairs(post)
+
+########### simulate fake data from this model
+nsim = 1000
+df.Sim = data.frame(1:nsim)
+df.Sim$Gata1 = rnorm(nsim)
+df.Sim$Lmo2 = rnorm(nsim)
+df.Sim$Ldb1 = rnorm(nsim)
+df.Sim$Tcf3 = rnorm(nsim)
+df.Sim$Stil = rnorm(nsim)
+colnames(df.Sim)
+## model matrix
+m = cbind(1, as.matrix(df.Sim[,-1]))
+head(m)
+coef(fit.5)
+m = m %*% coef(fit.5)[-7]
+df.Sim$Zfpm1 = rnorm(nsim, m)
+
+## refit the model to the simulated data
+fit.5.sim <- quap(
+  alist(
+    Zfpm1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
+    b0 ~ dnorm(0, 2),
+    c(Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim,
+  start=list(b0=0)
+)
+summary(fit.5.sim)
+plot(coeftab(fit.5, fit.5.sim), pars=c('Ga', 'Lm', 'Ld', 'Tc', 'St'), main='Activation of Fog1 Original and Simulated')
+
+## behaviour of Lmo2 when other variables are at average value
+i = range(dfData$Lmo2)
+iGrid = seq(i[1], i[2], length.out = 50)
+colnames(df.Sim)
+## see pages 105 to 109 (rethinking book)
+dfIntervention = data.frame(Lmo2=iGrid, Gata1=0, Ldb1=0, Tcf3=0, Stil=0)
+mu.av = link(fit.5, data=dfIntervention, n=100)
+plot(dfData$Lmo2, dfData$Zfpm1, pch=20, col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))],
+     xlab='Lmo2', ylab='Fog1', main='Relationship between Lmo2 and Fog1', cex=1.2)
+legend('topright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+lines(iGrid, colMeans(mu.av), col=1)
+shade(apply(mu.av, 2, HPDI, prob=0.89), iGrid)
+
+## repeat plot with simulated data
+plot(df.Sim$Lmo2, df.Sim$Zfpm1, pch=20, 
+     xlab='Lmo2', ylab='Fog1', main='Relationship between Lmo2 and Fog1 in simulated data', cex=0.8)
+i = range(df.Sim$Lmo2)
+iGrid = seq(i[1], i[2], length.out = 50)
+colnames(df.Sim)
+## see pages 105 to 109 (rethinking book)
+dfIntervention = data.frame(Lmo2=iGrid, Gata1=0, Ldb1=0, Tcf3=0, Stil=0)
+mu.av = link(fit.5, data=dfIntervention, n=100)
+lines(iGrid, colMeans(mu.av), col=1)
+shade(apply(mu.av, 2, HPDI, prob=0.89), iGrid)
+
+### knockout lmo2 in the data
+## refit the model to the simulated data after knocking out lmo2
+df.ko = dfData
+df.ko$Lmo2 = min(dfData$Lmo2)
+colnames(df.ko)
+mu.ob = link(fit.5, data=dfData, n=100)
+mu.ko = link(fit.5, data=df.ko, n=100)
+
+par(mfrow=c(3,2))
+plot(density(dfData$Zfpm1), main='Original Fog1')
+plot(density(colMeans(mu.ob)), main='Simulated Fog1')
+plot(density(colMeans(mu.ko)), main='Simulated Fog1, Lmo2 set to min')
+
+df.ko$Lmo2 = 0
+mu.ko = link(fit.5, data=df.ko, n=100)
+plot(density(colMeans(mu.ko)), main='Simulated Fog1, Lmo2 set to average')
+
+df.ko$Lmo2 = max(dfData$Lmo2)
+mu.ko = link(fit.5, data=df.ko, n=100)
+plot(density(colMeans(mu.ko)), main='Simulated Fog1, Lmo2 set to max')
+
+## save the data to carry forward to next phase
+lFog1.sim = list(dfSim = df.Sim, fit.fog = fit.5, fit.fog.sim = fit.5.sim)
+###########################################################
+
+###########################################################
 ########## Band3/Slc4a1 expression models of various sizes
 ###########################################################
-library(rethinking)
 ## choose the variable to model
 colnames(dfData)
 
-fit.1 <- quap(
+fit.1a <- quap(
   alist(
     Slc4a1 ~ dnorm(mu, sigmaPop),
     mu <- b0 + Ga*Gata1,
@@ -126,17 +222,19 @@ fit.1 <- quap(
   ), data=dfData,
   start=list(b0=0)
 )
-summary(fit.1)
-precis(fit.1)
-post = extract.samples(fit.1, n=1000)
-dim(post)
-head(post)
-precis(post)
-plot(precis(post))
-plot(coeftab(fit.1), pars=c('b0', 'Ga'))
-pairs(post)
 
-###### add another covariate, fog1 22761 zfpm1
+fit.1b <- quap(
+  alist(
+    Slc4a1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Fog*Zfpm1,
+    b0 ~ dnorm(0, 2),
+    c(Fog) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+
+###### add both covariates, fog1 22761 zfpm1
 fit.2 <- quap(
   alist(
     Slc4a1 ~ dnorm(mu, sigmaPop),
@@ -148,11 +246,56 @@ fit.2 <- quap(
   start=list(b0=0)
 )
 summary(fit.2)
-plot(coeftab(fit.1, fit.2), pars=c('b0', 'Ga', 'Fog'))
-plot(compare(fit.1, fit.2))
+plot(coeftab(fit.1a, fit.1b, fit.2), pars=c('b0', 'Ga', 'Fog'))
 pairs(fit.2)
 
-################## simulations from DAG1
+### fit the 6 covariates
+fit.6 <- quap(
+  alist(
+    Slc4a1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Fog*Zfpm1 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
+    b0 ~ dnorm(0, 2),
+    c(Fog, Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=dfData,
+  start=list(b0=0)
+)
+summary(fit.6)
+plot(coeftab(fit.6, lFog1.sim$fit.fog, fit.2), pars=c('Fog', 'Ga', 'Lm', 'Ld', 'Tc', 'St'), main='Activation of Slc4a1')
+
+########### simulate fake data from the model 6
+nsim = 1000
+df.Sim = data.frame(1:nsim)
+df.Sim$Zfpm1 = rnorm(nsim)
+df.Sim$Gata1 = rnorm(nsim)
+df.Sim$Lmo2 = rnorm(nsim)
+df.Sim$Ldb1 = rnorm(nsim)
+df.Sim$Tcf3 = rnorm(nsim)
+df.Sim$Stil = rnorm(nsim)
+colnames(df.Sim)
+## model matrix
+m = cbind(1, as.matrix(df.Sim[,-1]))
+head(m)
+coef(fit.6)
+m = m %*% coef(fit.6)[-8]
+df.Sim$Slc4a1 = rnorm(nsim, m)
+
+fit.6.sim <- quap(
+  alist(
+    Slc4a1 ~ dnorm(mu, sigmaPop),
+    mu <- b0 + Fog*Zfpm1 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
+    b0 ~ dnorm(0, 2),
+    c(Fog, Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
+    sigmaPop ~ dexp(1)
+  ), data=df.Sim,
+  start=list(b0=0)
+)
+
+## the simulation does reproduce the coefficients as expected
+plot(coeftab(fit.6, fit.6.sim))
+## this should be a 2 step simulation
+
+################## simulations from smaller network, i.e. fit.2
 nsim = 1000
 df.Sim = data.frame(1:nsim)
 df.Sim$Gata1 = rnorm(nsim)
@@ -160,22 +303,10 @@ df.Sim$Zfpm1 = rnorm(nsim)
 m = cbind(1, as.matrix(df.Sim[,-1]))
 head(m)
 coef(fit.2)
-m = m %*% coef(fit.1)[-4]
+m = m %*% coef(fit.2)[-4]
 df.Sim$Slc4a1 = rnorm(nsim, m)
 
-
 ## recover coefficients using simulated data fit
-fit.1.sim <- quap(
-  alist(
-    Slc4a1 ~ dnorm(mu, sigmaPop),
-    mu <- b0 + Ga*Gata1,
-    b0 ~ dnorm(0, 2),
-    c(Ga) ~ dnorm(0, 1),
-    sigmaPop ~ dexp(1)
-  ), data=df.Sim,
-  start=list(b0=0)
-)
-
 fit.2.sim <- quap(
   alist(
     Slc4a1 ~ dnorm(mu, sigmaPop),
@@ -187,49 +318,12 @@ fit.2.sim <- quap(
   start=list(b0=0)
 )
 
-plot(coeftab(fit.2, fit.1.sim, fit.2.sim), pars=c('b0', 'Ga', 'Fog'))
+plot(coeftab(fit.2, fit.2.sim), pars=c('b0', 'Ga', 'Fog'))
 
-################## simulations from DAG2
-nsim = 1000
-df.Sim2 = data.frame(1:nsim)
-df.Sim2$Gata1 = rnorm(nsim)
-df.Sim2$Lmo2 = rnorm(nsim)
-df.Sim2$Ldb1 = rnorm(nsim)
-df.Sim2$Tcf3 = rnorm(nsim)
-df.Sim2$Stil = rnorm(nsim)
+################## simulations from 2 step dag
+df.Sim2 = lFog1.sim$dfSim
 
-fit.temp <- quap(
-  alist(
-    Zfpm1 ~ dnorm(mu, sigmaPop),
-    mu <- b0 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
-    b0 ~ dnorm(0, 2),
-    c(Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
-    sigmaPop ~ dexp(1)
-  ), data=dfData,
-  start=list(b0=0)
-)
-summary(fit.temp)
-colnames(df.Sim2)
-m = cbind(1, as.matrix(df.Sim2[,-1]))
-head(m)
-coef(fit.temp)
-m = m %*% coef(fit.temp)[-7]
-df.Sim2$Zfpm1 = rnorm(nsim, m)
-
-fit.temp.sim <- quap(
-  alist(
-    Zfpm1 ~ dnorm(mu, sigmaPop),
-    mu <- b0 + Ga*Gata1 + Lm*Lmo2 + Ld*Ldb1 + Tc*Tcf3 + St*Stil,
-    b0 ~ dnorm(0, 2),
-    c(Ga, Lm, Ld, Tc, St) ~ dnorm(0, 1),
-    sigmaPop ~ dexp(1)
-  ), data=df.Sim2,
-  start=list(b0=0)
-)
-
-plot(coeftab(fit.temp, fit.temp.sim))
-
-### generate the Slc data now
+### generate the Slc data in second step
 colnames(df.Sim2)
 m = cbind(1, as.matrix(df.Sim2[,c('Gata1', 'Zfpm1')]))
 head(m)
@@ -250,40 +344,63 @@ fit.2.sim2 <- quap(
 )
 
 plot(coeftab(fit.2, fit.2.sim, fit.2.sim2), pars=c('b0', 'Ga', 'Fog'))
+plot(coeftab(fit.2, fit.2.sim, fit.2.sim2), pars=c('Ga', 'Fog'), main='Activation of Slc4a1 - Original and Simulations')
 
-#### fog1 alone
-fit.1.f <- quap(
-  alist(
-    Slc4a1 ~ dnorm(mu, sigmaPop),
-    mu <- b0 + Fog*Zfpm1,
-    b0 ~ dnorm(0, 2),
-    c(Fog) ~ dnorm(0, 1),
-    sigmaPop ~ dexp(1)
-  ), data=dfData,
-  start=list(b0=0)
-)
+## behaviour of Fog when other variables are at average value
+i = range(dfData$Zfpm1)
+iGrid = seq(i[1], i[2], length.out = 50)
+colnames(df.Sim)
+## see pages 105 to 109 (rethinking book)
+dfIntervention = data.frame(Zfpm1=iGrid, Gata1=0)
+mu.av = link(fit.2, data=dfIntervention, n=100)
+plot(dfData$Zfpm1, dfData$Slc4a1, pch=20, col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))],
+     xlab='Fog1', ylab='Slc4a1', main='Relationship between Slc4a1/Band3 and Fog1', cex=1.2)
+legend('bottomright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+lines(iGrid, colMeans(mu.av), col=1)
+shade(apply(mu.av, 2, HPDI, prob=0.89), iGrid)
 
-plot(coeftab(fit.1, fit.1.f, fit.2, fit.2.sim, fit.2.sim2), pars=c('b0', 'Ga', 'Fog'))
-plot(coeftab(fit.1, fit.1.f, fit.2, fit.2.sim2))
+## behaviour of Gata1 when other variables are at average value
+i = range(dfData$Gata1)
+iGrid = seq(i[1], i[2], length.out = 50)
+colnames(df.Sim)
+## see pages 105 to 109 (rethinking book)
+dfIntervention = data.frame(Gata1=iGrid, Zfpm1=0)
+mu.av = link(fit.2, data=dfIntervention, n=100)
+plot(dfData$Gata1, dfData$Slc4a1, pch=20, col=c(1,2, 3, 4, 5)[as.numeric(factor(dfSample.2$group3))],
+     xlab='Gata1', ylab='Slc4a1', main='Relationship between Slc4a1/Band3 and Gata1', cex=1.2)
+legend('bottomright', legend = levels(factor(dfSample.2$group3)), fill=c(1,2,3,4, 5))
+lines(iGrid, colMeans(mu.av), col=1)
+shade(apply(mu.av, 2, HPDI, prob=0.89), iGrid)
 
+## repeat plot with simulated data
+plot(df.Sim$Zfpm1, df.Sim$Slc4a1, pch=20, 
+     xlab='Fog1', ylab='Slc4a1', main='Relationship between Band3 and Fog1 in simulated data', cex=0.8)
+i = range(df.Sim$Zfpm1)
+iGrid = seq(i[1], i[2], length.out = 50)
+colnames(df.Sim)
+## see pages 105 to 109 (rethinking book)
+dfIntervention = data.frame(Zfpm1=iGrid, Gata1=0)
+mu.av = link(fit.2, data=dfIntervention, n=100)
+lines(iGrid, colMeans(mu.av), col=1)
+shade(apply(mu.av, 2, HPDI, prob=0.89), iGrid)
 
 #### add a section on fake-data simulation 
 #### compare with the original data
 ## simulate data
-fake.fit.1 = sim(fit.1, n = 300)
-fake.fit.1.sim = sim(fit.1.sim, n=300)
-
+fake.fit.1a = sim(fit.1a, n = 300)
+fake.fit.1b = sim(fit.1b, n = 300)
 fake.fit.2 = sim(fit.2, n = 300)
 fake.fit.2.sim = sim(fit.2.sim, n=300)
 fake.fit.2.sim2 = sim(fit.2.sim2, n=300)
+
+par(mfrow=c(1,1))
 hist(dfData$Slc4a1, prob=T)
 lines(density(colMeans(fake.fit.2)), col=1)
 lines(density(colMeans(fake.fit.2.sim)), col=2)
 lines(density(colMeans(fake.fit.2.sim2)), col=3)
+lines(density(colMeans(fake.fit.1a)))
+lines(density(colMeans(fake.fit.1b)))
 
-lines(density(df.Sim$Slc4a1), col=2)
-lines(density(df.Sim2$Slc4a1), col=3)
-lines(density(dfData$Slc4a1), col=1)
 ###########################################################
 
 ###########################################################
